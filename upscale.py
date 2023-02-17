@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import logging
+import os
 import sys
 from collections import OrderedDict
 from enum import Enum
@@ -70,7 +71,7 @@ class Upscale:
     def __init__(
         self,
         model: str,
-        input: Path,
+        input: Path or str,
         output: Path,
         reverse: bool = False,
         skip_existing: bool = False,
@@ -138,9 +139,9 @@ class Upscale:
         if not self.input.exists():
             self.log.error(f'Folder "{self.input}" does not exist.')
             sys.exit(1)
-        elif self.input.is_file():
-            self.log.error(f'Folder "{self.input}" is a file.')
-            sys.exit(1)
+        # elif self.input.is_file():
+        #     self.log.error(f'Folder "{self.input}" is a file.')
+        #     sys.exit(1)
         elif self.output.is_file():
             self.log.error(f'Folder "{self.output}" is a file.')
             sys.exit(1)
@@ -155,9 +156,12 @@ class Upscale:
             )
         )
 
-        images: List[Path] = []
-        for ext in ["png", "jpg", "jpeg", "gif", "bmp", "tiff", "tga"]:
-            images.extend(self.input.glob(f"**/*.{ext}"))
+        if os.path.isfile(self.input):
+          images = [self.input]
+        else:
+          images: List[Path] = []
+          for ext in ["png", "jpg", "jpeg", "gif", "bmp", "tiff", "tga"]:
+              images.extend(self.input.glob(f"**/*.{ext}"))
 
         # Store the maximum split depths for each model in the chain
         # TODO: there might be a better way of doing this but it's good enough for now
@@ -173,7 +177,7 @@ class Upscale:
             task_upscaling = progress.add_task("Upscaling", total=len(images))
             for idx, img_path in enumerate(images, 1):
                 img_input_path_rel = img_path.relative_to(self.input)
-                output_dir = self.output.joinpath(img_input_path_rel).parent
+                output_dir = self.output.joinpath(img_input_path_rel).parent if not os.path.isfile(self.input) else self.output.joinpath(img_input_path_rel)
                 img_output_path_rel = output_dir.joinpath(f"{img_path.stem}.png")
                 output_dir.mkdir(parents=True, exist_ok=True)
                 if len(model_chain) == 1:
