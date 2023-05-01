@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 import torch
 import typer
+from tqdm.auto import tqdm
 from rich import print
 from rich.logging import RichHandler
 from rich.progress import BarColumn, Progress, TaskID, TimeRemainingColumn
@@ -170,14 +171,7 @@ class Upscale:
         # TODO: there might be a better way of doing this but it's good enough for now
         split_depths = {}
 
-        with Progress(
-            # SpinnerColumn(),
-            "[progress.description]{task.description}",
-            BarColumn(),
-            "[progress.percentage]{task.percentage:>3.0f}%",
-            TimeRemainingColumn(),
-        ) as progress:
-            task_upscaling = progress.add_task("Upscaling", total=len(images))
+        with tqdm(total=len(images), desc="Upscaling") as pbar:
             for idx, img_path in enumerate(images, 1):
                 img_input_path_rel = img_path.relative_to(self.input)
                 output_dir = self.output.joinpath(img_input_path_rel).parent if not os.path.isfile(self.input) else self.output.joinpath(img_input_path_rel)
@@ -191,7 +185,7 @@ class Upscale:
                     self.log.warning("Already exists, skipping")
                     if self.delete_input:
                         img_path.unlink(missing_ok=True)
-                    progress.advance(task_upscaling)
+                    pbar.update(1)
                     continue
                 # read image
                 img = cv2.imread(str(img_path.absolute()), cv2.IMREAD_UNCHANGED)
@@ -244,7 +238,7 @@ class Upscale:
                     # This is for model chaining
                     img = rlt.astype("uint8")
                     if len(model_chain) > 1:
-                        progress.advance(task_model_chain)
+                        continue
 
                 if self.seamless:
                     rlt = self.crop_seamless(rlt, final_scale)
@@ -254,7 +248,8 @@ class Upscale:
                 if self.delete_input:
                     img_path.unlink(missing_ok=True)
 
-                progress.advance(task_upscaling)
+                pbar.update(1)
+        pbar.close()
 
     def __check_model_path(self, model_path: str) -> str:
         if Path(model_path).is_file():
@@ -484,7 +479,7 @@ def esrgan_upscale(esrganargs):
     verbose = esrganargs.verbose
 
     logging.basicConfig(
-        level=logging.DEBUG if verbose else logging.WARNING,
+        level=logging.DEBUG if esrganargs.verbose else logging.WARNING,
         format="%(message)s",
         datefmt="[%X]",
         handlers=[RichHandler(markup=True)],
