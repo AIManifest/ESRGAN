@@ -56,6 +56,7 @@ class Upscale:
     alpha_threshold: float = None
     alpha_boundary_offset: float = None
     alpha_mode: AlphaOptions = None
+    save_interpolation: bool = False
     log: logging.Logger = None
 
     device: torch.device = None
@@ -89,6 +90,7 @@ class Upscale:
         alpha_threshold: float = 0.5,
         alpha_boundary_offset: float = 0.2,
         alpha_mode: Optional[AlphaOptions] = None,
+        save_interpolation: bool = False,
         log: logging.Logger = logging.getLogger(),
     ) -> None:
         self.model_str = model
@@ -108,6 +110,7 @@ class Upscale:
         self.alpha_threshold = alpha_threshold
         self.alpha_boundary_offset = alpha_boundary_offset
         self.alpha_mode = alpha_mode
+        self.save_interpolation = save_interpolation
         self.log = log
         if self.fp16:
             torch.set_default_tensor_type(
@@ -296,8 +299,11 @@ class Upscale:
                 "&" in model_path or "|" in model_path
             ):
                 interps = model_path.split("&")[:2]
+                print(f"Loading from {interps}")
                 model_1 = torch.load(interps[0].split("@")[0])
+                print(f"Loading {interps[0].split('@')[0]}")
                 model_2 = torch.load(interps[1].split("@")[0])
+                print(f"Loading {interps[1].split('@')[0]}")
                 state_dict = OrderedDict()
                 for k, v_1 in model_1.items():
                     v_2 = model_2[k]
@@ -308,6 +314,16 @@ class Upscale:
                 state_dict = torch.load(model_path)
             # print(self.outscale)
             # SRVGGNet Real-ESRGAN (v2)
+
+            if self.save_interpolation:
+                model_dir = Path("./models")
+                count = len(os.listdir(model_dir))
+                interps1 = interps[0].split('@')[0].split('/')[-1].split('.pth')[0]
+                interps2 = interps[1].split('@')[0].split('/')[-1].split('.pth')[0]
+                interpolated_path = f"{model_dir}/interpolated_{interps1}_{interps2}.pth"
+                torch.save(state_dict, interpolated_path)
+
+
             if (
                 "params" in state_dict.keys()
                 and "body.0.weight" in state_dict["params"].keys()
@@ -477,6 +493,7 @@ def esrgan_upscale(esrganargs):
     alpha_boundary_offset = esrganargs.alpha_boundary_offset
     alpha_mode = esrganargs.alpha_mode
     verbose = esrganargs.verbose
+    save_interpolation = esrganargs.save_interpolation
 
     logging.basicConfig(
         level=logging.DEBUG if esrganargs.verbose else logging.WARNING,
@@ -504,5 +521,6 @@ def esrgan_upscale(esrganargs):
         alpha_threshold=alpha_threshold,
         alpha_boundary_offset=alpha_boundary_offset,
         alpha_mode=alpha_mode,
+        save_interpolation=save_interpolation
     )
     upscale.run()
