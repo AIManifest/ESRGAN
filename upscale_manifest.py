@@ -19,6 +19,7 @@ from rich.logging import RichHandler
 from rich.progress import BarColumn, Progress, TaskID, TimeRemainingColumn
 
 import utils.dataops as ops
+from utils.write_video import create_video
 from utils.architecture.RRDB import RRDBNet as ESRGAN
 from utils.architecture.SPSR import SPSRNet as SPSR
 from utils.architecture.SRVGG import SRVGGNetCompact as RealESRGANv2
@@ -57,6 +58,8 @@ class Upscale:
     alpha_boundary_offset: float = None
     alpha_mode: AlphaOptions = None
     save_interpolation: bool = False
+    fps = None
+    render_video_after_upscale = False
     log: logging.Logger = None
 
     device: torch.device = None
@@ -91,6 +94,8 @@ class Upscale:
         alpha_boundary_offset: float = 0.2,
         alpha_mode: Optional[AlphaOptions] = None,
         save_interpolation: bool = False,
+        fps: int = None,
+        render_video_after_upscale: bool = False,
         log: logging.Logger = logging.getLogger(),
     ) -> None:
         self.model_str = model
@@ -111,6 +116,8 @@ class Upscale:
         self.alpha_boundary_offset = alpha_boundary_offset
         self.alpha_mode = alpha_mode
         self.save_interpolation = save_interpolation
+        self.fps = fps
+        self.render_video_after_upscale = render_video_after_upscale
         self.log = log
         if self.fp16:
             torch.set_default_tensor_type(
@@ -253,6 +260,11 @@ class Upscale:
 
                 pbar.update(1)
         pbar.close()
+
+        if self.render_video_after_upscale and self.input.is_dir() and not self.input.is_file():
+            logging.info(f'Creating output video from {self.output} --> framerate: {self.fps}')
+            create_video(self.output, self.fps)
+            logging.info(f'Output video created and saved to {self.output}')
 
     def __check_model_path(self, model_path: str) -> str:
         if Path(model_path).is_file():
@@ -493,10 +505,12 @@ def esrgan_upscale(esrganargs):
     alpha_boundary_offset = esrganargs.alpha_boundary_offset
     alpha_mode = esrganargs.alpha_mode
     verbose = esrganargs.verbose
+    fps = esrganargs.fps
+    render_video_after_upscale = esrganargs.render_video_after_upscale
     save_interpolation = esrganargs.save_interpolation
 
     logging.basicConfig(
-        level=logging.DEBUG if esrganargs.verbose else logging.WARNING,
+        level=logging.DEBUG if esrganargs.verbose else logging.INFO,
         format="%(message)s",
         datefmt="[%X]",
         handlers=[RichHandler(markup=True)],
@@ -521,6 +535,8 @@ def esrgan_upscale(esrganargs):
         alpha_threshold=alpha_threshold,
         alpha_boundary_offset=alpha_boundary_offset,
         alpha_mode=alpha_mode,
+        fps=fps,
+        render_video_after_upscale=render_video_after_upscale,
         save_interpolation=save_interpolation
     )
     upscale.run()
